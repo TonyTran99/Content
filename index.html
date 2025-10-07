@@ -1,0 +1,516 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// Helper function to download CSV
+const downloadCSV = (data, filename = 'ke-hoach-noi-dung.csv') => {
+    const csvHeader = "Tuần,Nội dung,Hook,Định dạng,CTA,Ghi chú\n";
+    const csvRows = data.map(row => 
+        [row.week, `"${row.content}"`, `"${row.hook}"`, row.format, `"${row.cta}"`, `"${row.notes}"`].join(',')
+    ).join('\n');
+    
+    const csvString = `${csvHeader}${csvRows}`;
+    const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+};
+
+// --- SVG Icons ---
+const CheckCircleIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+        <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
+);
+
+const CircleIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10" /></svg>
+);
+
+const DownloadIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+);
+
+const SparklesIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 3-1.9 5.8-5.8 1.9 5.8 1.9 1.9 5.8 1.9-5.8 5.8-1.9-5.8-1.9Z" /><path d="M5 3v4" /><path d="M19 17v4" /><path d="M3 5h4" /><path d="M17 19h4" /></svg>
+);
+
+// --- Data ---
+const strategyData = {
+    'personal-entertainment': {
+        title: '🧍‍♂️ Cá nhân – Giải trí',
+        icon: '🧍‍♂️',
+        bgColor: 'bg-rose-50',
+        textColor: 'text-rose-800',
+        goal: 'Xây dựng cộng đồng và tăng nhận diện qua nội dung gần gũi, hài hước, bắt trend.',
+        format: 'Video ngắn (TikTok/Reels), story kể chuyện, livestream tương tác, meme.',
+        structure: 'Hook (Gây tò mò/Hài hước) → Story (Chia sẻ trải nghiệm cá nhân) → CTA (Kêu gọi tương tác).',
+        hookExample: '“Kể cho mọi người nghe lần đầu tiên tôi bị khách hàng ‘bùng hàng’…”',
+        ctaExample: '“Bạn đã bao giờ gặp tình huống tương tự chưa? Kể tôi nghe với!”',
+    },
+    'personal-education': {
+        title: '🧍‍♂️ Cá nhân – Giáo dục',
+        icon: '🧍‍♂️',
+        bgColor: 'bg-sky-50',
+        textColor: 'text-sky-800',
+        goal: 'Tạo sự tin tưởng qua chia sẻ kiến thức, chuyên môn và kinh nghiệm thực tế.',
+        format: 'Video hướng dẫn 1–3 phút, infographic, bài chia sẻ case study, webinar.',
+        structure: 'Hook (Câu hỏi/Vấn đề nhức nhối) → Value (Chia sẻ giải pháp/kiến thức) → CTA (Mời hành động).',
+        hookExample: '“Bạn nghĩ bạt HDPE càng dày càng bền? Sai lầm lớn đó!”',
+        ctaExample: '“Theo dõi để tránh 5 lỗi tốn tiền khi lót hồ.”',
+    },
+    'brand-entertainment': {
+        title: '🏢 Thương hiệu – Giải trí',
+        icon: '🏢',
+        bgColor: 'bg-amber-50',
+        textColor: 'text-amber-800',
+        goal: 'Tăng tình yêu thương hiệu (brand love) qua các nội dung sáng tạo, thể hiện tính cách thương hiệu.',
+        format: 'Video viral, nội dung do người dùng tạo (UGC), minigame, hợp tác với KOLs.',
+        structure: 'Hook (Yếu tố bất ngờ/Trend) → Brand Mention (Lồng ghép thương hiệu tự nhiên) → CTA (Kêu gọi tham gia).',
+        hookExample: '“Thử thách 1001 kiểu mix đồ với chiếc áo phông của chúng tôi!”',
+        ctaExample: '“Dùng hashtag #StyleCuaToi để khoe outfit của bạn nhé!”',
+    },
+    'brand-education': {
+        title: '🏢 Thương hiệu – Giáo dục',
+        icon: '🏢',
+        bgColor: 'bg-emerald-50',
+        textColor: 'text-emerald-800',
+        goal: 'Trở thành chuyên gia trong ngành, cung cấp giá trị và giải quyết vấn đề cho khách hàng tiềm năng.',
+        format: 'Bài viết blog chuyên sâu, video giải thích (explainer video), báo cáo/ebook, hướng dẫn sử dụng sản phẩm.',
+        structure: 'Hook (Số liệu/Thực trạng) → Content (Phân tích & Hướng dẫn) → CTA (Tải tài liệu/Dùng thử).',
+        hookExample: '“70% chiến dịch quảng cáo thất bại vì thiếu yếu tố này.”',
+        ctaExample: '“Tải ngay checklist 10 bước để tối ưu quảng cáo của bạn.”',
+    }
+};
+
+const generateMockTopics = (niche, type) => {
+    if (!niche) niche = "lĩnh vực của bạn";
+    if (type === 'education') {
+        return [
+            { title: `3 sai lầm người mới thường mắc phải trong ${niche}`, idea: `Video ngắn chỉ ra 3 lỗi sai phổ biến và cách khắc phục nhanh chóng.`, cta: `Bình luận "yes" nếu bạn đã từng mắc phải ít nhất một lỗi.` },
+            { title: `Hướng dẫn A-Z về [một kỹ năng cụ thể] trong ${niche}`, idea: `Infographic hoặc video carousel từng bước một cách chi tiết.`, cta: `Lưu lại bài viết này để xem lại khi cần nhé.` },
+            { title: `Phân biệt [Khái niệm 1] và [Khái niệm 2] trong ${niche}`, idea: `Video so sánh trực quan, chỉ ra điểm khác biệt cốt lõi.`, cta: `Bạn còn nhầm lẫn về khái niệm nào khác không?` },
+            { title: `Case study: Tôi đã [đạt được kết quả] trong ${niche} như thế nào`, idea: `Bài viết kể lại hành trình, những khó khăn và bài học kinh nghiệm.`, cta: `Theo dõi để xem thêm nhiều case study thực tế hơn.` },
+            { title: `Checklist 10 điều cần làm trước khi bắt đầu với ${niche}`, idea: `Một danh sách các đầu việc quan trọng giúp người mới bắt đầu đúng hướng.`, cta: `Bạn muốn nhận file PDF checklist này không?` },
+        ];
+    }
+    // entertainment
+    return [
+        { title: `Một ngày làm việc trong ngành ${niche} của tôi`, idea: `Vlog ngắn, hài hước về những tình huống "dở khóc dở cười" trong công việc.`, cta: `Công việc của bạn có gì vui, kể tôi nghe với!` },
+        { title: `Khi dân ${niche} bắt trend [tên trend]`, idea: `Video ngắn áp dụng một trend đang hot trên mạng xã hội vào bối cảnh của ngành.`, cta: `Tag một người bạn trong ngành ${niche} vào đây nào.` },
+        { title: `Những câu nói mà chỉ người trong ngành ${niche} mới hiểu`, idea: `Series video hài hước giải thích các thuật ngữ hoặc tình huống đặc thù.`, cta: `Bạn còn biết câu nói "bất hủ" nào khác không?` },
+        { title: `POV: Bạn là khách hàng lần đầu trải nghiệm ${niche}`, idea: `Video đóng vai, thể hiện góc nhìn của khách hàng một cách hài hước.`, cta: `Bạn có đồng ý với góc nhìn này không?` },
+        { title: `Thử thách 24 giờ chỉ làm [một việc gì đó] liên quan đến ${niche}`, idea: `Video tài liệu lại một thử thách thú vị và chia sẻ kết quả.`, cta: `Bạn muốn tôi làm thử thách gì tiếp theo?` },
+    ];
+};
+
+const generateMockPlan = (niche, strategyType) => {
+    if (!niche) niche = "lĩnh vực của bạn";
+    const topics = generateMockTopics(niche, strategyType);
+    return [
+        { week: 'Tuần 1', content: topics[0].title, hook: 'Sai lầm đầu tiên mà 90% người mới mắc phải...', format: 'Video ngắn', cta: topics[0].cta, notes: 'Tập trung vào tính tương tác' },
+        { week: 'Tuần 2', content: topics[1].title, hook: 'Bạn có muốn thành thạo [kỹ năng] trong 5 phút?', format: 'Carousel/Infographic', cta: topics[1].cta, notes: 'Cung cấp giá trị thực tế' },
+        { week: 'Tuần 3', content: topics[2].title, hook: 'Đừng nhầm lẫn giữa hai thứ này nữa!', format: 'Video so sánh', cta: topics[2].cta, notes: 'Giải quyết vấn đề cụ thể' },
+        { week: 'Tuần 4', content: topics[3].title, hook: 'Hành trình từ con số 0 đến thành công của tôi.', format: 'Story video/Bài viết dài', cta: topics[3].cta, notes: 'Xây dựng niềm tin' },
+    ];
+};
+
+// --- Components ---
+const MotionCard = ({ children, className, ...props }) => (
+    <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -20 }}
+        transition={{ duration: 0.5, ease: "easeInOut" }}
+        className={`bg-white rounded-2xl shadow-lg p-6 md:p-8 ${className}`}
+        {...props}
+    >
+        {children}
+    </motion.div>
+);
+
+const AppHeader = () => (
+    <header className="text-center mb-10">
+        <h1 className="text-4xl md:text-5xl font-bold text-gray-800 tracking-tight">
+            Social Strategy Coach
+        </h1>
+        <p className="text-lg md:text-xl text-gray-600 mt-2 font-light">Trợ lý Chiến Lược Nội Dung 2x2</p>
+    </header>
+);
+
+const StartScreen = ({ onStart }) => (
+    <MotionCard className="text-center flex flex-col items-center">
+        <h2 className="text-2xl md:text-3xl font-bold text-gray-800">Bắt đầu hành trình truyền thông của bạn!</h2>
+        <p className="mt-4 text-gray-600 max-w-2xl">
+            Không cần đoán mò. Không cần chạy theo trend. Trả lời 2 câu hỏi để nhận ngay kế hoạch nội dung được cá nhân hoá, dựa trên framework 2x2 hiệu quả.
+        </p>
+        <motion.button
+            whileHover={{ scale: 1.05, boxShadow: "0px 10px 20px rgba(60, 145, 230, 0.2)" }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onStart}
+            className="mt-8 bg-blue-600 text-white font-bold py-3 px-8 rounded-full text-lg shadow-md hover:bg-blue-700 transition-all duration-300"
+        >
+            🔹 Bắt đầu ngay
+        </motion.button>
+    </MotionCard>
+);
+
+const StrategyWizard = ({ onComplete }) => {
+    const [education, setEducation] = useState(null);
+    const [brandType, setBrandType] = useState(null);
+
+    useEffect(() => {
+        if (education !== null && brandType !== null) {
+            let strategy = '';
+            strategy += brandType === 'personal' ? 'personal' : 'brand';
+            strategy += '-';
+            strategy += education ? 'education' : 'entertainment';
+            setTimeout(() => onComplete(strategy), 500);
+        }
+    }, [education, brandType, onComplete]);
+
+    const questionVariants = {
+        hidden: { opacity: 0, x: -50 },
+        visible: { opacity: 1, x: 0 },
+    };
+
+    const buttonClasses = (isSelected) => 
+        `w-full text-left p-4 rounded-lg border-2 transition-all duration-300 ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-white hover:bg-gray-100 border-gray-200'}`;
+
+    return (
+        <MotionCard>
+            <div className="space-y-8">
+                <motion.div variants={questionVariants} initial="hidden" animate="visible" transition={{ duration: 0.5 }}>
+                    <h3 className="text-xl font-semibold text-gray-700 mb-4">Câu hỏi 1: Sản phẩm/dịch vụ của bạn có cần "giáo dục" người mua không?</h3>
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <motion.button whileTap={{scale: 0.98}} onClick={() => setEducation(true)} className={buttonClasses(education === true)}>
+                            <strong className="block text-lg">Có, cần giải thích</strong>
+                            <span className="text-sm">Khách hàng cần hiểu rõ giá trị, tính năng hoặc cách hoạt động.</span>
+                        </motion.button>
+                        <motion.button whileTap={{scale: 0.98}} onClick={() => setEducation(false)} className={buttonClasses(education === false)}>
+                           <strong className="block text-lg">Không, dễ hiểu</strong>
+                            <span className="text-sm">Sản phẩm mang tính cảm xúc, giải trí hoặc đã quá quen thuộc.</span>
+                        </motion.button>
+                    </div>
+                </motion.div>
+                
+                <AnimatePresence>
+                {education !== null && (
+                    <motion.div variants={questionVariants} initial="hidden" animate="visible" transition={{ duration: 0.5, delay: 0.2 }}>
+                        <h3 className="text-xl font-semibold text-gray-700 mb-4">Câu hỏi 2: Khán giả tin bạn (cá nhân) hay logo công ty hơn?</h3>
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <motion.button whileTap={{scale: 0.98}} onClick={() => setBrandType('personal')} className={buttonClasses(brandType === 'personal')}>
+                                <strong className="block text-lg">Cá nhân tôi 🧍‍♂️</strong>
+                                <span className="text-sm">Họ tin vào chuyên môn, kinh nghiệm và câu chuyện của tôi.</span>
+                            </motion.button>
+                            <motion.button whileTap={{scale: 0.98}} onClick={() => setBrandType('brand')} className={buttonClasses(brandType === 'brand')}>
+                               <strong className="block text-lg">Thương hiệu 🏢</strong>
+                                <span className="text-sm">Họ tin vào uy tín, quy mô và sự chuyên nghiệp của công ty.</span>
+                            </motion.button>
+                        </div>
+                    </motion.div>
+                )}
+                </AnimatePresence>
+            </div>
+        </MotionCard>
+    );
+};
+
+const StrategyGuidance = ({ strategy, onNext }) => {
+    const data = strategyData[strategy];
+    if (!data) return null;
+
+    return (
+        <MotionCard>
+            <div className={`p-4 rounded-xl ${data.bgColor} ${data.textColor}`}>
+                <h3 className="text-2xl font-bold">✅ Chiến lược của bạn: {data.title}</h3>
+            </div>
+            
+            <div className="mt-6 space-y-4">
+                <div className="p-4 bg-gray-50 rounded-lg">
+                    <h4 className="font-semibold text-gray-800">🎯 Mục tiêu</h4>
+                    <p className="text-gray-600">{data.goal}</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-lg">
+                    <h4 className="font-semibold text-gray-800">🎬 Định dạng nội dung</h4>
+                    <p className="text-gray-600">{data.format}</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-lg">
+                    <h4 className="font-semibold text-gray-800">🏗️ Cấu trúc gợi ý</h4>
+                    <p className="text-gray-600">{data.structure}</p>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                     <div className="p-4 bg-gray-50 rounded-lg">
+                        <h4 className="font-semibold text-gray-800">🎣 Ví dụ Hook</h4>
+                        <p className="text-gray-600 italic">"{data.hookExample}"</p>
+                    </div>
+                     <div className="p-4 bg-gray-50 rounded-lg">
+                        <h4 className="font-semibold text-gray-800">📣 CTA mẫu</h4>
+                        <p className="text-gray-600 italic">"{data.ctaExample}"</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="text-center mt-8">
+                <motion.button
+                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    onClick={onNext}
+                    className="bg-blue-600 text-white font-bold py-3 px-8 rounded-full shadow-md hover:bg-blue-700 transition-colors"
+                >
+                    Tiếp theo: Lấy ý tưởng nội dung
+                </motion.button>
+            </div>
+        </MotionCard>
+    );
+};
+
+const TopicGenerator = ({ strategy, onNext }) => {
+    const [niche, setNiche] = useState('');
+    const [topics, setTopics] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleGenerate = () => {
+        setIsLoading(true);
+        const strategyType = strategy.includes('education') ? 'education' : 'entertainment';
+        const generatedTopics = generateMockTopics(niche, strategyType);
+        setTimeout(() => {
+            setTopics(generatedTopics);
+            setIsLoading(false);
+        }, 1000);
+    };
+
+    return (
+        <MotionCard>
+            <h3 className="text-2xl font-bold text-gray-800 text-center">Gợi ý chủ đề nội dung</h3>
+            <p className="text-center text-gray-600 mb-6">Nhập lĩnh vực của bạn để nhận 5 ý tưởng đầu tiên!</p>
+            
+            <div className="flex flex-col sm:flex-row gap-2 mb-6">
+                <input 
+                    type="text"
+                    value={niche}
+                    onChange={(e) => setNiche(e.target.value)}
+                    placeholder="Ví dụ: Dạy tiếng Anh, Bất động sản, Giảm cân..."
+                    className="flex-grow p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                />
+                <motion.button
+                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    onClick={handleGenerate}
+                    disabled={isLoading}
+                    className="bg-emerald-500 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-emerald-600 transition-colors disabled:bg-gray-400 flex items-center justify-center"
+                >
+                    <SparklesIcon className="w-5 h-5 mr-2"/>
+                    {isLoading ? 'Đang tạo...' : 'Tạo ý tưởng'}
+                </motion.button>
+            </div>
+
+            <AnimatePresence>
+                {topics.length > 0 && (
+                    <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }} 
+                        className="space-y-4"
+                    >
+                        {topics.map((topic, index) => (
+                            <motion.div 
+                                key={index}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: index * 0.1 }}
+                                className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+                            >
+                                <h4 className="font-semibold text-blue-700">{index + 1}. {topic.title}</h4>
+                                <p className="text-gray-600 mt-1"><strong className="font-medium">Ý tưởng:</strong> {topic.idea}</p>
+                                <p className="text-gray-600 mt-1"><strong className="font-medium">CTA gợi ý:</strong> {topic.cta}</p>
+                            </motion.div>
+                        ))}
+                         <div className="text-center mt-8">
+                            <motion.button
+                                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                                onClick={() => onNext(niche)}
+                                className="bg-blue-600 text-white font-bold py-3 px-8 rounded-full shadow-md hover:bg-blue-700 transition-colors"
+                            >
+                                Tuyệt vời! Tạo kế hoạch 4 tuần
+                            </motion.button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </MotionCard>
+    );
+};
+
+const ContentPlan = ({ niche, strategy, onNext }) => {
+    const strategyType = strategy.includes('education') ? 'education' : 'entertainment';
+    const plan = generateMockPlan(niche, strategyType);
+
+    return (
+        <MotionCard>
+             <h3 className="text-2xl font-bold text-gray-800 text-center">Kế hoạch nội dung 4 tuần</h3>
+             <p className="text-center text-gray-600 mb-6">Đây là lộ trình gợi ý để bạn bắt đầu. Bạn có thể tùy chỉnh và tải về.</p>
+            
+             <div className="overflow-x-auto">
+                 <table className="w-full text-sm text-left text-gray-500">
+                    <thead className="text-xs text-gray-700 uppercase bg-gray-100">
+                        <tr>
+                            <th scope="col" className="px-6 py-3 rounded-l-lg">Tuần</th>
+                            <th scope="col" className="px-6 py-3">Nội dung</th>
+                            <th scope="col" className="px-6 py-3">Hook</th>
+                            <th scope="col" className="px-6 py-3">Định dạng</th>
+                            <th scope="col" className="px-6 py-3">CTA</th>
+                            <th scope="col" className="px-6 py-3 rounded-r-lg">Ghi chú</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {plan.map((row, index) => (
+                            <tr key={index} className="bg-white border-b hover:bg-gray-50">
+                                <td className="px-6 py-4 font-medium text-gray-900">{row.week}</td>
+                                <td className="px-6 py-4">{row.content}</td>
+                                <td className="px-6 py-4 italic">"{row.hook}"</td>
+                                <td className="px-6 py-4"><span className="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">{row.format}</span></td>
+                                <td className="px-6 py-4">{row.cta}</td>
+                                <td className="px-6 py-4">{row.notes}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                 </table>
+             </div>
+             <div className="text-center mt-8 space-y-4 md:space-y-0 md:space-x-4">
+                 <motion.button
+                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    onClick={() => downloadCSV(plan, `ke-hoach-${niche.replace(/\s+/g, '-')}.csv`)}
+                    className="bg-emerald-500 text-white font-bold py-3 px-6 rounded-full shadow-md hover:bg-emerald-600 transition-colors inline-flex items-center"
+                >
+                    <DownloadIcon className="w-5 h-5 mr-2"/>
+                    Tải về file CSV
+                </motion.button>
+                 <motion.button
+                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    onClick={onNext}
+                    className="bg-blue-600 text-white font-bold py-3 px-8 rounded-full shadow-md hover:bg-blue-700 transition-colors"
+                >
+                    Xem lộ trình triển khai
+                </motion.button>
+             </div>
+        </MotionCard>
+    );
+};
+
+const ProgressTracker = ({ onRestart }) => {
+    const stages = [
+        "Xác định chiến lược (chọn ô 2x2)",
+        "Nghiên cứu 10 kênh mẫu trong lĩnh vực",
+        "Viết 3 kịch bản/nội dung đầu tiên",
+        "Đăng bài & đo lường hiệu suất tuần đầu",
+        "Cải tiến và nhân bản công thức thành công"
+    ];
+
+    const [completed, setCompleted] = useState(Array(stages.length).fill(false));
+
+    const toggleStage = (index) => {
+        const newCompleted = [...completed];
+        newCompleted[index] = !newCompleted[index];
+        setCompleted(newCompleted);
+    };
+
+    return (
+        <MotionCard>
+             <h3 className="text-2xl font-bold text-gray-800 text-center">Huấn luyện theo giai đoạn</h3>
+             <p className="text-center text-gray-600 mb-6">Hãy theo dõi tiến trình của bạn để đảm bảo đi đúng hướng.</p>
+             <div className="space-y-3">
+                {stages.map((stage, index) => (
+                    <motion.div
+                        key={index}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.15 }}
+                        onClick={() => toggleStage(index)}
+                        className={`flex items-center p-4 rounded-lg cursor-pointer transition-all duration-300 ${completed[index] ? 'bg-green-100 text-green-800' : 'bg-gray-100 hover:bg-gray-200'}`}
+                    >
+                        {completed[index] ? <CheckCircleIcon className="w-6 h-6 mr-3 text-green-500" /> : <CircleIcon className="w-6 h-6 mr-3 text-gray-400" />}
+                        <span className={`font-medium ${completed[index] ? 'line-through' : ''}`}>{index + 1}. {stage}</span>
+                    </motion.div>
+                ))}
+             </div>
+             <div className="text-center mt-8">
+                 <motion.button
+                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    onClick={onRestart}
+                    className="bg-gray-700 text-white font-bold py-3 px-8 rounded-full shadow-md hover:bg-gray-800 transition-colors"
+                >
+                    Làm lại từ đầu
+                </motion.button>
+             </div>
+        </MotionCard>
+    );
+}
+
+// --- Main App Component ---
+export default function App() {
+    const [step, setStep] = useState('start'); // start, wizard, guidance, topic, plan, tracker
+    const [strategy, setStrategy] = useState(null);
+    const [niche, setNiche] = useState('');
+
+    const handleStart = () => setStep('wizard');
+    
+    const handleWizardComplete = (selectedStrategy) => {
+        setStrategy(selectedStrategy);
+        setStep('guidance');
+    };
+    
+    const handleGuidanceNext = () => setStep('topic');
+    
+    const handleTopicNext = (userNiche) => {
+        setNiche(userNiche);
+        setStep('plan');
+    };
+
+    const handlePlanNext = () => setStep('tracker');
+
+    const handleRestart = () => {
+        setStep('start');
+        setStrategy(null);
+        setNiche('');
+    };
+
+    const renderStep = () => {
+        switch (step) {
+            case 'start':
+                return <StartScreen key="start" onStart={handleStart} />;
+            case 'wizard':
+                return <StrategyWizard key="wizard" onComplete={handleWizardComplete} />;
+            case 'guidance':
+                return <StrategyGuidance key="guidance" strategy={strategy} onNext={handleGuidanceNext} />;
+            case 'topic':
+                return <TopicGenerator key="topic" strategy={strategy} onNext={handleTopicNext} />;
+            case 'plan':
+                return <ContentPlan key="plan" niche={niche} strategy={strategy} onNext={handlePlanNext} />;
+            case 'tracker':
+                return <ProgressTracker key="tracker" onRestart={handleRestart} />;
+            default:
+                return <StartScreen key="default" onStart={handleStart} />;
+        }
+    };
+
+    return (
+        <div className="bg-gray-50 min-h-screen font-sans antialiased text-gray-900">
+            <div className="container mx-auto px-4 py-10 md:py-16">
+                <AppHeader />
+                <main className="max-w-4xl mx-auto">
+                    <AnimatePresence mode="wait">
+                        {renderStep()}
+                    </AnimatePresence>
+                </main>
+                <footer className="text-center mt-12 text-gray-500 text-sm">
+                    <p>Dựa trên framework 2x2 của Kallaway, tinh gọn cho doanh nghiệp & nhà sáng tạo Việt Nam.</p>
+                </footer>
+            </div>
+        </div>
+    );
+}
